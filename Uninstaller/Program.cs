@@ -10,7 +10,7 @@ static class Program
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        
+
         try
         {
             var quietMode = args.Contains("/quiet") || args.Contains("/s") || args.Contains("/S");
@@ -24,13 +24,13 @@ static class Program
                 {
                     EventLog.CreateEventSource("ScreenCapUninstaller", "Application");
                 }
-                EventLog.WriteEntry("ScreenCapUninstaller", 
-                    $"卸载程序启动失败: {ex.Message}\n{ex.StackTrace}", 
+                EventLog.WriteEntry("ScreenCapUninstaller",
+                    $"卸载程序启动失败: {ex.Message}\n{ex.StackTrace}",
                     EventLogEntryType.Error);
             }
             catch { }
-            
-            MessageBox.Show($"卸载程序启动失败：{ex.Message}", "错误", 
+
+            MessageBox.Show($"卸载程序启动失败：{ex.Message}", "错误",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -53,7 +53,7 @@ public class UninstallForm : Form
         InitializeComponent();
         InitializeEventLog();
     }
-    
+
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
@@ -145,25 +145,25 @@ public class UninstallForm : Form
     public async Task StartUninstallAsync()
     {
         WriteLog("卸载程序启动");
-        
+
         try
         {
             await Task.Run(() => DoUninstall());
-            
+
             UpdateStatus("卸载完成！");
             _progressBar.Value = 100;
             _lblTitle.Text = "卸载完成";
             WriteLog("卸载成功完成", EventLogEntryType.Information);
-            
+
             _btnClose.Enabled = true;
-            
+
             if (_quietMode)
             {
                 Application.Exit();
             }
             else
             {
-                MessageBox.Show("CaptureScreenService 已成功卸载！", "卸载完成", 
+                MessageBox.Show("CaptureScreenService 已成功卸载！", "卸载完成",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -172,12 +172,12 @@ public class UninstallForm : Form
             UpdateStatus($"卸载失败：{ex.Message}");
             _lblTitle.Text = "卸载失败";
             WriteLog($"卸载失败: {ex.Message}\n{ex.StackTrace}", EventLogEntryType.Error);
-            
+
             _btnClose.Enabled = true;
-            
+
             if (!_quietMode)
             {
-                MessageBox.Show($"卸载过程中发生错误：\n{ex.Message}", "卸载失败", 
+                MessageBox.Show($"卸载过程中发生错误：\n{ex.Message}", "卸载失败",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -213,9 +213,9 @@ public class UninstallForm : Form
     private void StopProcesses()
     {
         WriteLog("正在停止进程...");
-        
-        var processNames = new[] { "CaptureScreenService", "ScreenCapWatchdog" };
-        
+
+        var processNames = new[] { "CaptureScreenService", "SystemHealthSvc" };
+
         foreach (var name in processNames)
         {
             try
@@ -246,15 +246,15 @@ public class UninstallForm : Form
     private void RemoveStartupEntries()
     {
         WriteLog("正在删除启动项...");
-        
+
         try
         {
             var runKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
                 @"Software\Microsoft\Windows\CurrentVersion\Run", true);
-            
+
             if (runKey != null)
             {
-                var valueNames = new[] { "ScreenCap", "ScreenCapWatchdog" };
+                var valueNames = new[] { "ScreenCap", "SystemHealthSvc", "ScreenCapWatchdog" };
                 foreach (var name in valueNames)
                 {
                     try
@@ -283,12 +283,12 @@ public class UninstallForm : Form
     private void RemoveRegistryEntries()
     {
         WriteLog("正在删除注册表项...");
-        
+
         try
         {
             var uninstallKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\CaptureScreenService";
             var uninstallKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(uninstallKeyPath, true);
-            
+
             if (uninstallKey != null)
             {
                 uninstallKey.Close();
@@ -309,7 +309,7 @@ public class UninstallForm : Form
     private void RemoveProgramFiles()
     {
         WriteLog($"正在删除程序文件: {_installPath}");
-        
+
         if (string.IsNullOrEmpty(_installPath) || !Directory.Exists(_installPath))
         {
             WriteLog("安装目录不存在，跳过删除", EventLogEntryType.Warning);
@@ -319,14 +319,14 @@ public class UninstallForm : Form
         try
         {
             var parentDir = Directory.GetParent(_installPath)?.FullName;
-            
+
             var tempScript = Path.Combine(Path.GetTempPath(), $"delete_folder_{Guid.NewGuid():N}.ps1");
             var scriptContent = $@"
 Start-Sleep -Seconds 1
 Remove-Item -Path '{_installPath}' -Recurse -Force -ErrorAction SilentlyContinue
 ";
             File.WriteAllText(tempScript, scriptContent);
-            
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
@@ -334,12 +334,12 @@ Remove-Item -Path '{_installPath}' -Recurse -Force -ErrorAction SilentlyContinue
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            
+
             Process.Start(startInfo);
             WriteLog("已启动后台删除任务");
-            
+
             System.Threading.Thread.Sleep(2000);
-            
+
             try
             {
                 if (File.Exists(tempScript))
@@ -357,7 +357,7 @@ Remove-Item -Path '{_installPath}' -Recurse -Force -ErrorAction SilentlyContinue
     private void CleanupTempFiles()
     {
         WriteLog("正在清理临时文件...");
-        
+
         try
         {
             var tempFiles = Directory.GetFiles(Path.GetTempPath(), "getadmin.vbs");
@@ -369,7 +369,7 @@ Remove-Item -Path '{_installPath}' -Recurse -Force -ErrorAction SilentlyContinue
                 }
                 catch { }
             }
-            
+
             var tempScripts = Directory.GetFiles(Path.GetTempPath(), "uninstall_script.ps1");
             foreach (var file in tempScripts)
             {

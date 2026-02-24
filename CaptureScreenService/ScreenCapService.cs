@@ -1,7 +1,6 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using System.Security.Authentication;
 using Encoder = System.Drawing.Imaging.Encoder;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -50,25 +49,41 @@ public sealed class ScreenCapService
         _encryptionService = encryptionService;
     }
 
+    private static string MaskEmail(string? email)
+    {
+        if (string.IsNullOrEmpty(email))
+            return "***";
+
+        if (email.Contains('@'))
+        {
+            var parts = email.Split('@');
+            if (parts[0].Length <= 2)
+                return "***@" + parts[1];
+            return parts[0][0] + "***" + parts[0][^1] + "@" + parts[1];
+        }
+
+        return email.Length <= 2 ? "***" : email[0] + "***" + email[^1];
+    }
+
     public void CaptureMainScreen()
     {
-        _logger.LogInformation("=== 配置诊断开始 ===");
+        _logger.LogInformation("=== Config diagnostics start ===");
         _logger.LogInformation("StorageMode: {StorageMode}", _config.StorageMode);
         _logger.LogInformation("CaptureIntervalMinutes: {CaptureIntervalMinutes}", _config.CaptureIntervalMinutes);
         _logger.LogInformation("Local.SavePath: {SavePath}", _config.Local?.SavePath ?? "NULL");
-        _logger.LogInformation("Email对象是否为null: {IsNull}", _config.Email == null);
+        _logger.LogInformation("Email object is null: {IsNull}", _config.Email == null);
         if (_config.Email != null)
         {
             _logger.LogInformation("Email.Provider: {Provider}", _config.Email.Provider);
             _logger.LogInformation("Email.SmtpServer: {SmtpServer}", _config.Email.SmtpServer ?? "NULL");
             _logger.LogInformation("Email.SmtpPort: {SmtpPort}", _config.Email.SmtpPort);
-            _logger.LogInformation("Email.EmailAddress: {EmailAddress}", _config.Email.EmailAddress ?? "NULL");
-            _logger.LogInformation("Email.EncryptedAuthCode长度: {Length}", _config.Email.EncryptedAuthCode?.Length ?? 0);
+            _logger.LogInformation("Email.EmailAddress: {EmailAddress}", MaskEmail(_config.Email.EmailAddress));
+            _logger.LogInformation("Email.EncryptedAuthCode length: {Length}", _config.Email.EncryptedAuthCode?.Length ?? 0);
         }
-        _logger.LogInformation("=== 配置诊断结束 ===");
-        
+        _logger.LogInformation("=== Config diagnostics end ===");
+
         string saveDirectory = _config.StorageMode == StorageMode.Local
-            ? _config.Local.SavePath
+            ? _config.Local?.SavePath ?? @"C:\temp\TempPics"
             : @"C:\temp\TempPics";
 
         try
@@ -187,91 +202,90 @@ public sealed class ScreenCapService
     private void SendEmailWithAttachment(string attachmentPath)
     {
         var emailConfig = _config.Email;
-        _logger.LogInformation("开始处理邮件发送 - 目标邮箱: {EmailAddress}", emailConfig.EmailAddress);
-        _logger.LogInformation("SMTP服务器: {SmtpServer}, 端口: {SmtpPort}", emailConfig.SmtpServer, emailConfig.SmtpPort);
-        _logger.LogInformation("邮箱提供商: {Provider}", emailConfig.Provider);
-        _logger.LogInformation("加密授权码长度: {Length}", emailConfig.EncryptedAuthCode?.Length ?? 0);
-        
-        string authCode = _encryptionService.Decrypt(emailConfig.EncryptedAuthCode);
-        _logger.LogInformation("授权码解密完成，长度: {Length}", authCode?.Length ?? 0);
-        
+        _logger.LogInformation("Starting email send process - Target: {EmailAddress}", MaskEmail(emailConfig.EmailAddress));
+        _logger.LogInformation("SMTP server: {SmtpServer}, Port: {SmtpPort}", emailConfig.SmtpServer, emailConfig.SmtpPort);
+        _logger.LogInformation("Email provider: {Provider}", emailConfig.Provider);
+        _logger.LogInformation("Encrypted auth code length: {Length}", emailConfig.EncryptedAuthCode?.Length ?? 0);
+
+        string authCode = _encryptionService.Decrypt(emailConfig.EncryptedAuthCode ?? "");
+        _logger.LogInformation("Auth code decryption completed, length: {Length}", authCode?.Length ?? 0);
+
         if (string.IsNullOrEmpty(emailConfig.EmailAddress))
         {
-            _logger.LogError("邮件配置不完整: 邮箱地址为空");
+            _logger.LogError("Email config incomplete: email address is empty");
             File.Delete(attachmentPath);
-            _logger.LogInformation("临时文件已删除: {AttachmentPath}", attachmentPath);
-            return;
-        }
-        
-        if (string.IsNullOrEmpty(authCode))
-        {
-            _logger.LogError("邮件配置不完整: 授权码为空或解密失败");
-            File.Delete(attachmentPath);
-            _logger.LogInformation("临时文件已删除: {AttachmentPath}", attachmentPath);
+            _logger.LogInformation("Temp file deleted: {AttachmentPath}", attachmentPath);
             return;
         }
 
-        _logger.LogInformation("邮件配置验证通过，准备发送邮件");
-        
+        if (string.IsNullOrEmpty(authCode))
+        {
+            _logger.LogError("Email config incomplete: auth code is empty or decryption failed");
+            File.Delete(attachmentPath);
+            _logger.LogInformation("Temp file deleted: {AttachmentPath}", attachmentPath);
+            return;
+        }
+
+        _logger.LogInformation("Email config validated, preparing to send");
+
         try
         {
-            _logger.LogInformation("正在发送邮件到: {EmailAddress}", emailConfig.EmailAddress);
-            _logger.LogInformation("邮件主题: 电脑监控");
-            _logger.LogInformation("邮件附件: {AttachmentPath}", attachmentPath);
-            
+            _logger.LogInformation("Sending email to: {EmailAddress}", MaskEmail(emailConfig.EmailAddress));
+            _logger.LogInformation("Email subject: Screen Monitor");
+            _logger.LogInformation("Email attachment: {AttachmentPath}", attachmentPath);
+
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("", emailConfig.EmailAddress));
             message.To.Add(new MailboxAddress("", emailConfig.EmailAddress));
-            message.Subject = "电脑监控";
-            
+            message.Subject = "Screen Monitor";
+
             var bodyBuilder = new BodyBuilder
             {
-                TextBody = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss 的监控截图")
+                TextBody = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss monitor screenshot")
             };
             bodyBuilder.Attachments.Add(attachmentPath);
             message.Body = bodyBuilder.ToMessageBody();
 
-            _logger.LogInformation("邮件消息创建完成，正在发送...");
-            
+            _logger.LogInformation("Email message created, sending...");
+
             using (var smtpClient = new SmtpClient())
             {
                 if (emailConfig.Provider == EmailProvider.NetEase)
                 {
-                    _logger.LogInformation("网易邮箱配置: 使用隐式SSL (端口465)");
+                    _logger.LogInformation("NetEase email config: using implicit SSL (port 465)");
                     smtpClient.Connect(emailConfig.SmtpServer, emailConfig.SmtpPort, SecureSocketOptions.SslOnConnect);
                 }
                 else
                 {
-                    _logger.LogInformation("QQ邮箱配置: 使用STARTTLS (端口587)");
+                    _logger.LogInformation("QQ email config: using STARTTLS (port 587)");
                     smtpClient.Connect(emailConfig.SmtpServer, emailConfig.SmtpPort, SecureSocketOptions.StartTls);
                 }
 
                 smtpClient.Authenticate(emailConfig.EmailAddress, authCode);
                 smtpClient.Send(message);
                 smtpClient.Disconnect(true);
-                
-                _logger.LogInformation("邮件发送成功！");
-                _logger.LogInformation("邮件发送详情: 发件人={From}, 收件人={To}, 主题={Subject}", 
-                    emailConfig.EmailAddress, emailConfig.EmailAddress, "电脑监控");
+
+                _logger.LogInformation("Email sent successfully!");
+                _logger.LogInformation("Email details: From={From}, To={To}, Subject={Subject}",
+                    MaskEmail(emailConfig.EmailAddress), MaskEmail(emailConfig.EmailAddress), "Screen Monitor");
             }
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "邮件发送失败: {Message}", e.Message);
-            _logger.LogError("错误详情: {StackTrace}", e.StackTrace);
+            _logger.LogError(e, "Email send failed: {Message}", e.Message);
         }
-        
+
         try
         {
             File.Delete(attachmentPath);
-            _logger.LogInformation("临时文件删除成功: {AttachmentPath}", attachmentPath);
+            _logger.LogInformation("Temp file deleted successfully: {AttachmentPath}", attachmentPath);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "临时文件删除失败: {Message}", ex.Message);
+            _logger.LogError(ex, "Temp file deletion failed: {Message}", ex.Message);
         }
-        
-        _logger.LogInformation("邮件发送流程处理完成");
+
+        _logger.LogInformation("Email send process completed");
     }
 
     private ImageCodecInfo GetEncoderInfo(string mimeType)
@@ -284,6 +298,6 @@ public sealed class ScreenCapService
                 return codec;
             }
         }
-        throw new ArgumentException("未找到指定MIME类型的图像编码器");
+        throw new ArgumentException("Image encoder for specified MIME type not found");
     }
 }

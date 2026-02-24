@@ -26,10 +26,16 @@ public class LocalConfig
     public string SavePath { get; set; } = @"C:\temp\TempPics";
 }
 
+public class SecurityConfig
+{
+    public string Entropy { get; set; } = "";
+}
+
 public class AppConfig
 {
     public StorageMode StorageMode { get; set; } = StorageMode.Email;
     public LocalConfig Local { get; set; } = new();
     public EmailConfig Email { get; set; } = new();
+    public SecurityConfig Security { get; set; } = new();
     public int CaptureIntervalMinutes { get; set; } = 5;
 }

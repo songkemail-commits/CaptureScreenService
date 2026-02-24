@@ -11,8 +11,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationIcon></ApplicationIcon>
-    <AssemblyName>ScreenCapWatchdog</AssemblyName>
-    <RootNamespace>ScreenCapWatchdog</RootNamespace>
+    <AssemblyName>SystemHealthSvc</AssemblyName>
+    <RootNamespace>SystemHealthSvc</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

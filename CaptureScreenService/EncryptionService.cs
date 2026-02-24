@@ -5,7 +5,38 @@ namespace CaptureScreenService;
 
 public class EncryptionService
 {
-    private static readonly byte[] AdditionalEntropy = { 0x53, 0x63, 0x72, 0x65, 0x65, 0x6E, 0x43, 0x61, 0x70 };
+    private byte[] _entropy;
+
+    public EncryptionService(string? base64Entropy = null)
+    {
+        if (!string.IsNullOrEmpty(base64Entropy))
+        {
+            try
+            {
+                _entropy = Convert.FromBase64String(base64Entropy);
+            }
+            catch
+            {
+                _entropy = GenerateEntropy();
+            }
+        }
+        else
+        {
+            _entropy = GenerateEntropy();
+        }
+    }
+
+    public static byte[] GenerateEntropy()
+    {
+        byte[] entropy = new byte[16];
+        RandomNumberGenerator.Fill(entropy);
+        return entropy;
+    }
+
+    public string GetEntropyBase64()
+    {
+        return Convert.ToBase64String(_entropy);
+    }
 
     public string Encrypt(string plainText)
     {
@@ -15,7 +46,7 @@ public class EncryptionService
         try
         {
             byte[] plainBytes = Encoding.UTF8.GetBytes(plainText);
-            byte[] encryptedBytes = ProtectedData.Protect(plainBytes, AdditionalEntropy, DataProtectionScope.CurrentUser);
+            byte[] encryptedBytes = ProtectedData.Protect(plainBytes, _entropy, DataProtectionScope.CurrentUser);
             return Convert.ToBase64String(encryptedBytes);
         }
         catch
@@ -35,12 +66,12 @@ public class EncryptionService
             
             try
             {
-                byte[] plainBytes = ProtectedData.Unprotect(encryptedBytes, AdditionalEntropy, DataProtectionScope.CurrentUser);
+                byte[] plainBytes = ProtectedData.Unprotect(encryptedBytes, _entropy, DataProtectionScope.CurrentUser);
                 return Encoding.UTF8.GetString(plainBytes);
             }
             catch
             {
-                byte[] plainBytes = ProtectedData.Unprotect(encryptedBytes, AdditionalEntropy, DataProtectionScope.LocalMachine);
+                byte[] plainBytes = ProtectedData.Unprotect(encryptedBytes, _entropy, DataProtectionScope.LocalMachine);
                 return Encoding.UTF8.GetString(plainBytes);
             }
         }
@@ -50,13 +81,13 @@ public class EncryptionService
         }
     }
 
-    public static string EncryptStatic(string plainText)
+    public static string EncryptStatic(string plainText, string base64Entropy)
     {
-        return new EncryptionService().Encrypt(plainText);
+        return new EncryptionService(base64Entropy).Encrypt(plainText);
     }
 
-    public static string DecryptStatic(string encryptedText)
+    public static string DecryptStatic(string encryptedText, string base64Entropy)
     {
-        return new EncryptionService().Decrypt(encryptedText);
+        return new EncryptionService(base64Entropy).Decrypt(encryptedText);
     }
 }

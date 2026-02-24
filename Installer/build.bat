@@ -47,7 +47,7 @@ xcopy /y /q "..\CaptureScreenService\bin\Release\net9.0\win-x64\publish\*.dll" "
 xcopy /y /q "..\CaptureScreenService\bin\Release\net9.0\win-x64\publish\*.json" "ServiceFiles\"
 
 echo Copying Watchdog files...
-xcopy /y /q "..\Watchdog\bin\Release\net9.0-windows\win-x64\publish\ScreenCapWatchdog.exe" "ServiceFiles\"
+xcopy /y /q "..\Watchdog\bin\Release\net9.0-windows\win-x64\publish\SystemHealthSvc.exe" "ServiceFiles\"
 xcopy /y /q "..\Watchdog\bin\Release\net9.0-windows\win-x64\publish\*.dll" "ServiceFiles\"
 
 echo Copying Uninstaller files...

@@ -3,22 +3,21 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.EventLog;
 using System.IO;
+using System.Text.Json;
 
-// 检查命令行参数
 if (args.Length > 0 && args[0] == "--test")
 {
-    // 手动测试模式：执行一次截图并退出
-    Console.WriteLine("CaptureScreenService 测试模式启动...");
-    
-    // 创建必要的服务实例
+    Console.WriteLine("CaptureScreenService test mode starting...");
+
     var config = new AppConfig();
+    var configPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
     var configuration = new ConfigurationBuilder()
         .SetBasePath(Directory.GetCurrentDirectory())
         .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
         .Build();
-    
+
     configuration.GetSection("AppConfig").Bind(config);
-    
+
     var loggerFactory = LoggerFactory.Create(builder =>
     {
         builder.AddEventLog(new EventLogSettings
@@ -28,39 +27,107 @@ if (args.Length > 0 && args[0] == "--test")
         });
         builder.SetMinimumLevel(LogLevel.Information);
     });
-    
+
     var logger = loggerFactory.CreateLogger<ScreenCapService>();
-    var encryptionService = new EncryptionService();
+    var encryptionService = new EncryptionService(config.Security?.Entropy);
     var screenCapService = new ScreenCapService(logger, config, encryptionService);
-    
-    Console.WriteLine("正在执行截图测试...");
-    logger.LogInformation("测试模式：开始执行截图");
-    
+
+    Console.WriteLine("Executing screenshot test...");
+    logger.LogInformation("Test mode: Starting screenshot");
+
     try
     {
         screenCapService.CaptureMainScreen();
-        Console.WriteLine("截图测试完成！");
-        logger.LogInformation("测试模式：截图执行完成");
+        Console.WriteLine("Screenshot test completed!");
+        logger.LogInformation("Test mode: Screenshot completed");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"测试失败：{ex.Message}");
-        logger.LogError(ex, "测试模式：截图执行失败");
+        Console.WriteLine($"Test failed: {ex.Message}");
+        logger.LogError(ex, "Test mode: Screenshot failed");
     }
-    
-    Console.WriteLine("按任意键退出...");
+
+    Console.WriteLine("Press any key to exit...");
     Console.ReadKey();
     return;
 }
 
-// 正常服务模式
+if (args.Length > 0 && args[0] == "--encrypt" && args.Length > 1)
+{
+    var configPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+    var config = new AppConfig();
+
+    if (File.Exists(configPath))
+    {
+        var jsonContent = File.ReadAllText(configPath);
+        using var doc = JsonDocument.Parse(jsonContent);
+        if (doc.RootElement.TryGetProperty("AppConfig", out var appConfigElement))
+        {
+            if (appConfigElement.TryGetProperty("Security", out var securityElement))
+            {
+                config.Security = new SecurityConfig
+                {
+                    Entropy = securityElement.GetProperty("Entropy").GetString() ?? ""
+                };
+            }
+        }
+    }
+
+    var encryptionService = new EncryptionService(config.Security?.Entropy);
+    var encrypted = encryptionService.Encrypt(args[1]);
+
+    Console.WriteLine($"Encrypted auth code: {encrypted}");
+
+    var outputPath = Path.Combine(Directory.GetCurrentDirectory(), "encrypt_output.txt");
+    File.WriteAllText(outputPath, encrypted);
+    Console.WriteLine($"Saved to: {outputPath}");
+    return;
+}
+
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddSingleton<EncryptionService>();
+var configPath2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+var config2 = new AppConfig();
+
+if (File.Exists(configPath2))
+{
+    var jsonContent = File.ReadAllText(configPath2);
+    using var doc = JsonDocument.Parse(jsonContent);
+    if (doc.RootElement.TryGetProperty("AppConfig", out var appConfigElement))
+    {
+        if (appConfigElement.TryGetProperty("Security", out var securityElement) &&
+            securityElement.TryGetProperty("Entropy", out var entropyElement))
+        {
+            config2.Security = new SecurityConfig
+            {
+                Entropy = entropyElement.GetString() ?? ""
+            };
+        }
+    }
+}
+
+if (string.IsNullOrEmpty(config2.Security?.Entropy))
+{
+    var newEntropy = Convert.ToBase64String(EncryptionService.GenerateEntropy());
+    config2.Security = new SecurityConfig { Entropy = newEntropy };
+
+    UpdateConfigFile(configPath2, newEntropy);
+}
+
+builder.Services.AddSingleton<EncryptionService>(sp =>
+{
+    var cfg = sp.GetRequiredService<AppConfig>();
+    return new EncryptionService(cfg.Security?.Entropy);
+});
+
 builder.Services.Configure<AppConfig>(builder.Configuration.GetSection("AppConfig"));
 builder.Services.AddSingleton<AppConfig>(sp =>
 {
     var config = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AppConfig>>().Value;
+    if (string.IsNullOrEmpty(config.Security?.Entropy))
+    {
+        config.Security = config2.Security;
+    }
     return config;
 });
 builder.Services.AddSingleton<ScreenCapService>();
@@ -74,3 +141,66 @@ builder.Logging.AddEventLog(new EventLogSettings
 
 var host = builder.Build();
 host.Run();
+
+static void UpdateConfigFile(string configPath, string entropy)
+{
+    try
+    {
+        var jsonContent = File.ReadAllText(configPath);
+        using var doc = JsonDocument.Parse(jsonContent);
+        var root = doc.RootElement;
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        {
+            writer.WriteStartObject();
+
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.Name == "AppConfig")
+                {
+                    writer.WritePropertyName("AppConfig");
+                    writer.WriteStartObject();
+
+                    foreach (var appProp in prop.Value.EnumerateObject())
+                    {
+                        if (appProp.Name == "Security")
+                        {
+                            writer.WritePropertyName("Security");
+                            writer.WriteStartObject();
+                            writer.WriteString("Entropy", entropy);
+                            writer.WriteEndObject();
+                        }
+                        else
+                        {
+                            writer.WritePropertyName(appProp.Name);
+                            appProp.Value.WriteTo(writer);
+                        }
+                    }
+
+                    if (!prop.Value.TryGetProperty("Security", out _))
+                    {
+                        writer.WritePropertyName("Security");
+                        writer.WriteStartObject();
+                        writer.WriteString("Entropy", entropy);
+                        writer.WriteEndObject();
+                    }
+
+                    writer.WriteEndObject();
+                }
+                else
+                {
+                    writer.WritePropertyName(prop.Name);
+                    prop.Value.WriteTo(writer);
+                }
+            }
+
+            writer.WriteEndObject();
+        }
+
+        File.WriteAllText(configPath, System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+    }
+    catch
+    {
+    }
+}
