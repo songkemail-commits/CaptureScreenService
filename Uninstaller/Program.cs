@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading;
 
 namespace Uninstaller;
 
@@ -148,23 +149,44 @@ public class UninstallForm : Form
 
         try
         {
-            await Task.Run(() => DoUninstall());
+            bool filesRemoved = await Task.Run(() => DoUninstall());
 
-            UpdateStatus("卸载完成！");
-            _progressBar.Value = 100;
-            _lblTitle.Text = "卸载完成";
-            WriteLog("卸载成功完成", EventLogEntryType.Information);
+            // 验证目录状态
+            bool directoryExists = Directory.Exists(_installPath);
 
-            _btnClose.Enabled = true;
-
-            if (_quietMode)
+            if (directoryExists)
             {
-                Application.Exit();
+                UpdateStatus("卸载完成，但部分文件未删除");
+                _progressBar.Value = 100;
+                _lblTitle.Text = "卸载完成";
+                WriteLog($"卸载完成，但安装目录仍存在: {_installPath}", EventLogEntryType.Warning);
+
+                _btnClose.Enabled = true;
+
+                if (!_quietMode)
+                {
+                    MessageBox.Show($"CaptureScreenService 卸载完成，但部分文件无法删除。\n\n剩余目录: {_installPath}\n\n请在重启电脑后手动删除该目录。", "卸载完成",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
             else
             {
-                MessageBox.Show("CaptureScreenService 已成功卸载！", "卸载完成",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UpdateStatus("卸载完成！");
+                _progressBar.Value = 100;
+                _lblTitle.Text = "卸载完成";
+                WriteLog("卸载成功完成", EventLogEntryType.Information);
+
+                _btnClose.Enabled = true;
+
+                if (_quietMode)
+                {
+                    Application.Exit();
+                }
+                else
+                {
+                    MessageBox.Show("CaptureScreenService 已成功卸载！", "卸载完成",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
         }
         catch (Exception ex)
@@ -183,7 +205,7 @@ public class UninstallForm : Form
         }
     }
 
-    private void DoUninstall()
+    private bool DoUninstall()
     {
         _installPath = GetInstallPath();
         WriteLog($"安装路径: {_installPath}");
@@ -198,10 +220,12 @@ public class UninstallForm : Form
         RemoveRegistryEntries();
 
         UpdateProgress(60, "删除程序文件...");
-        RemoveProgramFiles();
+        bool filesRemoved = RemoveProgramFiles();
 
         UpdateProgress(90, "清理临时文件...");
         CleanupTempFiles();
+
+        return filesRemoved;
     }
 
     private string GetInstallPath()
@@ -214,25 +238,48 @@ public class UninstallForm : Form
     {
         WriteLog("正在停止进程...");
 
-        var processNames = new[] { "CaptureScreenService", "SystemHealthSvc" };
+        var processNames = new[] { "CaptureScreenService", "SystemHealthSvc", "ScreenCap", "ScreenCapWatchdog" };
+        const int maxRetries = 2;
+        const int waitTime = 10000;
 
         foreach (var name in processNames)
         {
             try
             {
-                var processes = Process.GetProcessesByName(name);
-                foreach (var process in processes)
+                for (int retry = 0; retry <= maxRetries; retry++)
                 {
-                    try
+                    var processes = Process.GetProcessesByName(name);
+                    if (processes.Length == 0)
                     {
-                        WriteLog($"正在终止进程: {name} (PID: {process.Id})");
-                        process.Kill();
-                        process.WaitForExit(5000);
-                        WriteLog($"进程已终止: {name}");
+                        break;
                     }
-                    catch (Exception ex)
+
+                    if (retry > 0)
                     {
-                        WriteLog($"终止进程 {name} 失败: {ex.Message}", EventLogEntryType.Warning);
+                        WriteLog($"重试终止进程: {name} (尝试 {retry}/{maxRetries})");
+                        Thread.Sleep(1000);
+                    }
+
+                    foreach (var process in processes)
+                    {
+                        try
+                        {
+                            WriteLog($"正在终止进程: {name} (PID: {process.Id})");
+                            process.Kill();
+                            bool exited = process.WaitForExit(waitTime);
+                            if (exited)
+                            {
+                                WriteLog($"进程已终止: {name}");
+                            }
+                            else
+                            {
+                                WriteLog($"进程终止超时: {name}", EventLogEntryType.Warning);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            WriteLog($"终止进程 {name} 失败: {ex.Message}", EventLogEntryType.Warning);
+                        }
                     }
                 }
             }
@@ -241,6 +288,9 @@ public class UninstallForm : Form
                 WriteLog($"获取进程 {name} 失败: {ex.Message}", EventLogEntryType.Warning);
             }
         }
+
+        // 额外等待时间确保所有进程完全退出
+        Thread.Sleep(2000);
     }
 
     private void RemoveStartupEntries()
@@ -306,51 +356,154 @@ public class UninstallForm : Form
         }
     }
 
-    private void RemoveProgramFiles()
+    private bool RemoveProgramFiles()
     {
         WriteLog($"正在删除程序文件: {_installPath}");
 
         if (string.IsNullOrEmpty(_installPath) || !Directory.Exists(_installPath))
         {
             WriteLog("安装目录不存在，跳过删除", EventLogEntryType.Warning);
-            return;
+            return true;
         }
+
+        var failedFiles = new List<string>();
+        var failedDirectories = new List<string>();
 
         try
         {
-            var parentDir = Directory.GetParent(_installPath)?.FullName;
+            // 先删除目录中的文件
+            DeleteFilesInDirectory(_installPath, failedFiles);
 
-            var tempScript = Path.Combine(Path.GetTempPath(), $"delete_folder_{Guid.NewGuid():N}.ps1");
-            var scriptContent = $@"
-Start-Sleep -Seconds 1
-Remove-Item -Path '{_installPath}' -Recurse -Force -ErrorAction SilentlyContinue
-";
-            File.WriteAllText(tempScript, scriptContent);
+            // 再删除空目录
+            DeleteDirectory(_installPath, failedDirectories);
 
-            var startInfo = new ProcessStartInfo
+            // 检查删除结果
+            bool deletionSuccess = !Directory.Exists(_installPath);
+
+            if (deletionSuccess)
             {
-                FileName = "powershell.exe",
-                Arguments = $"-ExecutionPolicy Bypass -WindowStyle Hidden -File \"{tempScript}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            Process.Start(startInfo);
-            WriteLog("已启动后台删除任务");
-
-            System.Threading.Thread.Sleep(2000);
-
-            try
-            {
-                if (File.Exists(tempScript))
-                    File.Delete(tempScript);
+                WriteLog($"安装目录已成功删除: {_installPath}");
             }
-            catch { }
+            else
+            {
+                WriteLog($"安装目录删除失败: {_installPath}", EventLogEntryType.Error);
+
+                // 记录失败的文件和目录
+                foreach (var file in failedFiles)
+                {
+                    WriteLog($"无法删除文件: {file}", EventLogEntryType.Warning);
+                }
+                foreach (var dir in failedDirectories)
+                {
+                    WriteLog($"无法删除目录: {dir}", EventLogEntryType.Warning);
+                }
+            }
+
+            return deletionSuccess;
         }
         catch (Exception ex)
         {
             WriteLog($"删除程序文件失败: {ex.Message}", EventLogEntryType.Error);
-            throw;
+            return false;
+        }
+    }
+
+    private void DeleteFilesInDirectory(string directoryPath, List<string> failedFiles)
+    {
+        const int maxRetries = 3;
+        const int retryDelay = 1000;
+
+        try
+        {
+            var files = Directory.GetFiles(directoryPath, "*", SearchOption.AllDirectories);
+
+            foreach (var file in files)
+            {
+                for (int retry = 0; retry <= maxRetries; retry++)
+                {
+                    try
+                    {
+                        if (File.Exists(file))
+                        {
+                            File.SetAttributes(file, FileAttributes.Normal);
+                            File.Delete(file);
+                            WriteLog($"已删除文件: {file}");
+                            break;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        if (retry == maxRetries)
+                        {
+                            failedFiles.Add(file);
+                            WriteLog($"删除文件失败: {file}, 错误: {ex.Message}", EventLogEntryType.Warning);
+                        }
+                        else
+                        {
+                            Thread.Sleep(retryDelay);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WriteLog($"遍历目录文件失败: {ex.Message}", EventLogEntryType.Warning);
+        }
+    }
+
+    private void DeleteDirectory(string directoryPath, List<string> failedDirectories)
+    {
+        const int maxRetries = 3;
+        const int retryDelay = 1000;
+
+        try
+        {
+            // 递归删除子目录
+            var subDirectories = Directory.GetDirectories(directoryPath);
+            foreach (var subDir in subDirectories)
+            {
+                DeleteDirectory(subDir, failedDirectories);
+            }
+
+            // 删除当前目录
+            for (int retry = 0; retry <= maxRetries; retry++)
+            {
+                try
+                {
+                    if (Directory.Exists(directoryPath))
+                    {
+                        Directory.Delete(directoryPath, true);
+                        WriteLog($"已删除目录: {directoryPath}");
+                        break;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (retry == maxRetries)
+                    {
+                        failedDirectories.Add(directoryPath);
+                        WriteLog($"删除目录失败: {directoryPath}, 错误: {ex.Message}", EventLogEntryType.Warning);
+                    }
+                    else
+                    {
+                        Thread.Sleep(retryDelay);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WriteLog($"删除目录失败: {ex.Message}", EventLogEntryType.Warning);
+            failedDirectories.Add(directoryPath);
         }
     }
 
