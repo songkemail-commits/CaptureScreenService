@@ -1,3 +1,6 @@
+// Copyright (c) 2026 songkemail-commits
+// Licensed under the MIT License (MIT)
+
 namespace CaptureScreenService;
 
 public class Worker(ScreenCapService screenCapService, AppConfig config, ILogger<Worker> logger) : BackgroundService

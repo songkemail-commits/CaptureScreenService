@@ -1,12 +1,20 @@
-# CaptureScreenService 部署和使用文档
+# CaptureScreenService
 
 ## 项目概述
 
-CaptureScreenService 是一个 Windows 后台服务，用于定期截取屏幕。支持两种存储方式：
-- **本地存储**：将截图保存到本地文件夹
-- **邮箱发送**：将截图通过邮件发送（支持 QQ 邮箱、网易邮箱）
+CaptureScreenService 是一个功能强大的 Windows 后台服务，用于定期自动截取屏幕内容并支持多种存储方式。该服务采用守护进程架构，具有自动故障恢复能力，确保长时间稳定运行。
 
-该服务采用守护进程架构，具有自动故障恢复能力。
+![Screen Capture Service](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Windows%20screen%20capture%20service%20icon%20with%20monitor%20and%20camera%20symbol%2C%20professional%20blue%20color%2C%20clean%20design&image_size=square)
+
+## 功能特点
+
+- 📸 **自动屏幕截图**：定期截取主屏幕内容
+- 💾 **本地存储**：将截图保存到指定文件夹
+- 📧 **邮箱发送**：支持 QQ 邮箱和网易邮箱发送截图
+- 🔒 **安全加密**：使用 Windows DPAPI 加密存储邮箱授权码
+- 🛡️ **守护进程**：自动监控和恢复工作进程
+- 📊 **详细日志**：记录到 Windows 事件查看器
+- 🚀 **自包含部署**：无需安装 .NET 运行时
 
 ## 系统架构
 
@@ -32,99 +40,42 @@ CaptureScreenService 是一个 Windows 后台服务，用于定期截取屏幕�
 └─────────────────────────────────────────────────────────┘
 ```
 
-## 环境要求
+## 系统要求
 
 - **操作系统**: Windows 10/11 或 Windows Server 2016+
-- **运行时**: 无需安装（自包含部署，包含 .NET 9.0 运行时）
 - **架构**: x64
+- **运行时**: 无需安装（自包含部署，包含 .NET 9.0 运行时）
 
 ## 安装方式
 
 ### 方式一：使用安装程序（推荐）
 
-#### 1. 运行安装程序
-
-双击 `install.exe` 启动安装向导。
-
-#### 2. 安装向导步骤
-
-| 步骤 | 说明 |
-|------|------|
-| **欢迎页面** | 介绍程序功能 |
-| **安装路径** | 选择安装目录，默认 `C:\Program Files\CaptureScreenService` |
-| **存储模式** | 选择本地存储或邮箱发送 |
-| **本地配置** | 选择截图保存路径（本地存储模式） |
-| **邮箱提供商** | 选择 QQ 邮箱或网易邮箱（邮箱发送模式） |
-| **邮箱配置** | 输入邮箱地址和授权码 |
-| **安装进度** | 显示安装进度 |
-| **完成页面** | 安装成功提示 |
-
-#### 3. 安装完成后
-
-- 服务已自动注册为 Windows 服务
-- 服务已自动启动
-- 配置文件保存在安装目录下的 `appsettings.json`
+1. 下载最新的安装程序 `install.exe`
+2. 双击运行安装向导
+3. 按照向导步骤完成配置
+4. 安装完成后服务自动启动
 
 ### 方式二：手动安装
 
-#### 1. 编译项目
-
 ```powershell
+# 编译项目
 cd CaptureScreenService
 dotnet publish -c Release
-```
 
-发布后的文件位于: `bin\Release\net9.0\win-x64\publish\`
-
-#### 2. 复制文件到目标目录
-
-```powershell
+# 复制文件到目标目录
 Copy-Item -Path "bin\Release\net9.0\win-x64\publish\*" -Destination "C:\Program Files\CaptureScreenService\" -Recurse -Force
-```
-
-#### 3. 配置服务
-
 ```powershell
+# 配置服务
 cd "C:\Program Files\CaptureScreenService"
-.\CaptureScreenService.exe --configure
+./CaptureScreenService.exe --configure
+
+# 安装服务
+./CaptureScreenService.exe --install
 ```
-
-#### 4. 安装服务
-
-```powershell
-.\CaptureScreenService.exe --install
-```
-
-## 构建安装程序
-
-如需重新构建安装程序：
-
-```powershell
-cd Installer
-.\build.bat
-```
-
-构建脚本会：
-1. 编译主服务程序
-2. 将服务文件嵌入到安装程序
-3. 生成独立的 `install.exe`
-
-输出位置：`Installer\bin\Release\net9.0-windows\win-x64\publish\install.exe`
-
-## 命令行工具
-
-| 命令 | 说明 |
-|------|------|
-| `--configure` | 交互式配置 |
-| `--install` | 安装 Windows 服务 |
-| `--uninstall` | 卸载 Windows 服务 |
-| `--encrypt <code>` | 加密授权码 |
-| `--decrypt <code>` | 解密授权码 |
-| `--test` | 测试截图功能 |
 
 ## 配置说明
 
-配置文件: `appsettings.json`
+配置文件位于 `C:\Program Files\CaptureScreenService\appsettings.json`
 
 ### 完整配置示例
 
@@ -167,62 +118,37 @@ cd Installer
 }
 ```
 
-### 配置项说明
+## 命令行工具
 
-#### AppConfig 配置
+| 命令 | 说明 |
+|------|------|
+| `--configure` | 交互式配置 |
+| `--install` | 安装 Windows 服务 |
+| `--uninstall` | 卸载 Windows 服务 |
+| `--encrypt <code>` | 加密授权码 |
+| `--decrypt <code>` | 解密授权码 |
+| `--test` | 测试截图功能 |
 
-| 配置项 | 说明 | 可选值 |
-|--------|------|--------|
-| `StorageMode` | 存储模式 | `Local`（本地存储）、`Email`（邮箱发送） |
-| `CaptureIntervalMinutes` | 截图间隔（分钟） | 数字，默认 5 |
+## 邮箱授权码配置
 
-#### Local 配置（本地存储模式）
+### 获取授权码
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `SavePath` | 截图保存路径 | `C:\temp\TempPics` |
+1. **QQ 邮箱**：
+   - 登录 QQ 邮箱
+   - 进入 **设置** → **账户**
+   - 开启 **SMTP服务**
+   - 生成授权码
 
-#### Email 配置（邮箱发送模式）
+2. **网易邮箱**：
+   - 登录网易邮箱
+   - 进入 **设置** → **POP3/SMTP/IMAP**
+   - 开启 **SMTP服务**
+   - 生成授权码
 
-| 配置项 | 说明 | QQ邮箱 | 网易邮箱 |
-|--------|------|--------|----------|
-| `Provider` | 邮箱提供商 | `QQ` | `NetEase` |
-| `SmtpServer` | SMTP服务器 | `smtp.qq.com` | `smtp.163.com` |
-| `SmtpPort` | SMTP端口 | `587` | `465` |
-| `EmailAddress` | 邮箱地址 | 你的邮箱 | 你的邮箱 |
-| `EncryptedAuthCode` | 加密后的授权码 | - | - |
-
-#### Security 配置
-
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `Entropy` | 加密熵值（用于授权码加密） | 自动生成 |
-
-## 获取邮箱授权码
-
-### QQ 邮箱
-
-1. 访问：https://wx.mail.qq.com/list/readtemplate?name=app_intro.html#/agreement/authorizationCode
-2. 登录 QQ 邮箱
-3. 进入 **设置** → **账户**
-4. 找到 **POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务**
-5. 开启 **SMTP服务**
-6. 生成授权码
-
-### 网易邮箱
-
-1. 访问：https://help.mail.163.com/faqDetail.do?code=d7a5dc8471cd0c0e8b4b8f4f8e49998b374173cfe9171305fa1ce630d7f67ac2a5feb28b66796d3b
-2. 登录网易邮箱
-3. 进入 **设置** → **POP3/SMTP/IMAP**
-4. 开启 **SMTP服务**
-5. 生成授权码
-
-## 加密授权码
-
-授权码需要加密后才能写入配置文件：
+### 加密授权码
 
 ```powershell
-.\CaptureScreenService.exe --encrypt "你的授权码"
+./CaptureScreenService.exe --encrypt "你的授权码"
 ```
 
 加密后的授权码会保存到 `encrypt_output.txt` 文件中，将其复制到配置文件的 `EncryptedAuthCode` 字段。
@@ -250,14 +176,7 @@ Get-Service -Name "CaptureScreenService"
 ### 卸载服务
 
 ```powershell
-.\CaptureScreenService.exe --uninstall
-```
-
-或手动卸载：
-
-```powershell
-Stop-Service -Name "CaptureScreenService"
-sc.exe delete "CaptureScreenService"
+./CaptureScreenService.exe --uninstall
 ```
 
 ## 查看日志
@@ -302,33 +221,75 @@ Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='ScreenCapSv
 2. 检查系统资源（内存、CPU）
 3. 确认没有防病毒软件干扰
 
-## 文件结构
-
-```
-C:\Program Files\CaptureScreenService\
-├── CaptureScreenService.exe    # 主程序
-├── CaptureScreenService.dll    # 程序集
-├── appsettings.json            # 配置文件
-└── [其他依赖文件]
-
-C:\temp\TempPics\               # 本地存储模式的截图目录
-```
-
 ## 安全注意事项
 
 1. 服务以 Local System 账户运行，具有较高权限
 2. 授权码使用 Windows DPAPI 加密存储，与当前用户绑定
 3. 更换 Windows 用户后需要重新加密授权码
 4. 请妥善保管配置文件
-5. 加密使用 256 位熵值，提供更强的安全性
-6. 授权码存储采用版本化加密格式，支持未来加密算法升级
-7. 建议定期更新授权码，提高账户安全性
-8. 遵守相关法律法规，合理使用该工具
-9. 请勿将配置文件分享给他人，以免泄露敏感信息
-10. 定期检查服务运行状态，确保服务正常运行
+5. 建议定期更新授权码
+6. 遵守相关法律法规，合理使用该工具
+
+## 项目结构
+
+```
+CaptureScreenService0.3/
+├── CaptureScreenService/       # 主服务项目
+├── Installer/                  # 安装程序项目
+├── Uninstaller/                # 卸载程序项目
+├── Watchdog/                   # 守护进程项目
+├── .gitignore                  # Git 忽略文件
+├── cleanup.ps1                 # 清理脚本
+├── DEPLOYMENT.md               # 部署文档
+├── LICENSE.txt                 # 许可证文件
+└── README.md                   # 项目说明
+```
+
+## 构建项目
+
+### 构建主服务
+
+```powershell
+cd CaptureScreenService
+dotnet build -c Release
+```
+
+### 构建安装程序
+
+```powershell
+cd Installer
+./build.ps1
+```
+
+构建后的安装程序位于：`Installer\bin\Release\net9.0-windows\win-x64\publish\install.exe`
+
+## 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE.txt](LICENSE.txt) 文件了解详情
+
+## 贡献指南
+
+欢迎贡献代码、报告问题或提出建议！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 文件了解如何参与项目。
+
+## 代码行为准则
+
+我们期望所有参与者能够遵循项目的行为准则，创造一个友好、包容的社区环境。请查看 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 文件了解详情。
 
 ## 版本信息
 
-- 版本: 0.3
-- 目标框架: .NET 9.0
-- 最后更新: 2026年2月
+- **版本**: 0.3
+- **目标框架**: .NET 9.0
+- **最后更新**: 2026年2月
+
+## 免责声明
+
+1. 本软件仅供教育和个人使用目的
+2. 作者不对任何修改、改编或基于本软件的衍生作品负责
+3. 作者不承担任何因使用或误用本软件而产生的责任
+4. 用户应自行负责正确配置和保护软件
+5. 确保遵守适用的法律法规
+6. 确保软件的使用符合伦理和法律要求
+
+---
+
+**注意**: 使用本软件时请遵守相关法律法规，尊重他人隐私。
