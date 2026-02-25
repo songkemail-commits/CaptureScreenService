@@ -1,3 +1,6 @@
+// Copyright (c) 2026 songkemail-commits
+// Licensed under the MIT License (MIT)
+
 using CaptureScreenService;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -29,7 +32,8 @@ if (args.Length > 0 && args[0] == "--test")
     });
 
     var logger = loggerFactory.CreateLogger<ScreenCapService>();
-    var encryptionService = new EncryptionService(config.Security?.Entropy);
+    var encryptionLogger = loggerFactory.CreateLogger<EncryptionService>();
+    var encryptionService = new EncryptionService(config.Security?.Entropy, encryptionLogger);
     var screenCapService = new ScreenCapService(logger, config, encryptionService);
 
     Console.WriteLine("Executing screenshot test...");
@@ -117,7 +121,8 @@ if (string.IsNullOrEmpty(config2.Security?.Entropy))
 builder.Services.AddSingleton<EncryptionService>(sp =>
 {
     var cfg = sp.GetRequiredService<AppConfig>();
-    return new EncryptionService(cfg.Security?.Entropy);
+    var logger = sp.GetRequiredService<ILogger<EncryptionService>>();
+    return new EncryptionService(cfg.Security?.Entropy, logger);
 });
 
 builder.Services.Configure<AppConfig>(builder.Configuration.GetSection("AppConfig"));

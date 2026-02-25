@@ -1,0 +1,43 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
+
+    - name: Restore CaptureScreenService dependencies
+      run: dotnet restore CaptureScreenService.csproj
+      working-directory: ${{ github.workspace }}/CaptureScreenService
+
+    - name: Restore Installer dependencies
+      run: dotnet restore Installer.csproj
+      working-directory: ${{ github.workspace }}/Installer
+
+    - name: Build CaptureScreenService
+      run: dotnet build CaptureScreenService.csproj --configuration Release --no-restore
+      working-directory: ${{ github.workspace }}/CaptureScreenService
+
+    - name: Build Installer
+      run: |
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Running build.ps1..."
+        .\build.ps1
+      shell: pwsh
+      working-directory: ${{ github.workspace }}/Installer
+
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+      working-directory: ${{ github.workspace }}/CaptureScreenService
