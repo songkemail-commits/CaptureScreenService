@@ -18,16 +18,26 @@ jobs:
       with:
         dotnet-version: 9.0.x
 
-    - name: Restore dependencies
-      run: dotnet restore
+    - name: Restore CaptureScreenService dependencies
+      run: dotnet restore CaptureScreenService.csproj
+      working-directory: ${{ github.workspace }}/CaptureScreenService
+
+    - name: Restore Installer dependencies
+      run: dotnet restore Installer.csproj
+      working-directory: ${{ github.workspace }}/Installer
 
     - name: Build CaptureScreenService
-      run: dotnet build CaptureScreenService/CaptureScreenService.csproj --configuration Release --no-restore
+      run: dotnet build CaptureScreenService.csproj --configuration Release --no-restore
+      working-directory: ${{ github.workspace }}/CaptureScreenService
 
     - name: Build Installer
       run: |
-        cd Installer
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Running build.ps1..."
         .\build.ps1
+      shell: pwsh
+      working-directory: ${{ github.workspace }}/Installer
 
     - name: Test
       run: dotnet test --no-build --verbosity normal
+      working-directory: ${{ github.workspace }}/CaptureScreenService
