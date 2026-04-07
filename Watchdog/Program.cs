@@ -26,7 +26,7 @@ public class WatchdogService : BackgroundService
     public WatchdogService(ILogger<WatchdogService> logger)
     {
         _logger = logger;
-        _mainExePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CaptureScreenService.exe");
+        _mainExePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mossvc.exe");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -56,7 +56,7 @@ public class WatchdogService : BackgroundService
 
     private bool IsMainProcessRunning()
     {
-        var processes = Process.GetProcessesByName("CaptureScreenService");
+        var processes = Process.GetProcessesByName("mossvc");
         return processes.Length > 0;
     }
 

@@ -46,7 +46,7 @@ if (Test-Path "ServiceFiles") {
 New-Item "ServiceFiles" -ItemType Directory -Force
 
 Write-Host "Copying CaptureScreenService files..."
-Copy-Item "..\CaptureScreenService\bin\Release\net9.0\win-x64\publish\CaptureScreenService.exe" "ServiceFiles\" -Force
+Copy-Item "..\CaptureScreenService\bin\Release\net9.0\win-x64\publish\mossvc.exe" "ServiceFiles\" -Force
 Copy-Item "..\CaptureScreenService\bin\Release\net9.0\win-x64\publish\*.dll" "ServiceFiles\" -Force
 Copy-Item "..\CaptureScreenService\bin\Release\net9.0\win-x64\publish\*.json" "ServiceFiles\" -Force
 
@@ -56,6 +56,9 @@ Copy-Item "..\Watchdog\bin\Release\net9.0-windows\win-x64\publish\*.dll" "Servic
 
 Write-Host "Copying Uninstaller files..."
 Copy-Item "..\Uninstaller\bin\Release\net9.0-windows\win-x64\publish\uninstall.exe" "ServiceFiles\" -Force
+
+Write-Host "Copying EULA..."
+Copy-Item "..\CaptureScreenService\EULA.txt" "ServiceFiles\" -Force
 
 Write-Host "ServiceFiles directory contents:"
 get-childitem "ServiceFiles"

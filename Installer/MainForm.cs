@@ -31,7 +31,7 @@ public partial class MainForm : Form
     private ProgressBar _progressBar = null!;
     private Label _lblStatus = null!;
 
-    private string _installPath = @"C:\Program Files\CaptureScreenService";
+    private string _installPath = @"C:\Program Files\mossvc";
 
     private readonly string _eventLogSource = "ScreenCapInstaller";
     private readonly string _eventLogName = "Application";
@@ -820,11 +820,11 @@ public partial class MainForm : Form
         var uninstallKey = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\CaptureScreenService");
 
-        uninstallKey.SetValue("DisplayName", "CaptureScreenService");
+        uninstallKey.SetValue("DisplayName", "mossvc");
         uninstallKey.SetValue("DisplayVersion", "0.3");
-        uninstallKey.SetValue("Publisher", "CaptureScreenService");
+        uninstallKey.SetValue("Publisher", "mossvc");
         uninstallKey.SetValue("InstallLocation", _installPath);
-        uninstallKey.SetValue("DisplayIcon", Path.Combine(_installPath, "CaptureScreenService.exe"));
+        uninstallKey.SetValue("DisplayIcon", Path.Combine(_installPath, "mossvc.exe"));
         var uninstallExePath = Path.Combine(_installPath, "uninstall.exe");
         uninstallKey.SetValue("UninstallString", $"\"{uninstallExePath}\"");
         uninstallKey.SetValue("QuietUninstallString", $"\"{uninstallExePath}\" /quiet");
@@ -935,8 +935,13 @@ public partial class MainForm : Form
 
     private void StopService()
     {
-        RunCommand("sc.exe", "stop CaptureScreenService");
+        RunCommand("sc.exe", "stop mossvc");
         System.Threading.Thread.Sleep(2000);
+        RunCommand("sc.exe", "delete mossvc");
+        System.Threading.Thread.Sleep(1000);
+        // Also stop and delete old service name for compatibility
+        RunCommand("sc.exe", "stop CaptureScreenService");
+        System.Threading.Thread.Sleep(1000);
         RunCommand("sc.exe", "delete CaptureScreenService");
         System.Threading.Thread.Sleep(1000);
     }
@@ -945,8 +950,18 @@ public partial class MainForm : Form
     {
         try
         {
-            var processes = Process.GetProcessesByName("CaptureScreenService");
+            var processes = Process.GetProcessesByName("mossvc");
             foreach (var process in processes)
+            {
+                try
+                {
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+                catch { }
+            }
+            var oldProcesses = Process.GetProcessesByName("CaptureScreenService");
+            foreach (var process in oldProcesses)
             {
                 try
                 {
@@ -971,7 +986,7 @@ public partial class MainForm : Form
 
     private void RegisterStartup()
     {
-        var exePath = Path.Combine(_installPath, "CaptureScreenService.exe");
+        var exePath = Path.Combine(_installPath, "mossvc.exe");
         var runKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
         runKey?.SetValue("ScreenCap", exePath);
         runKey?.Close();
@@ -991,7 +1006,8 @@ public partial class MainForm : Form
         Process.Start(new ProcessStartInfo
         {
             FileName = watchdogPath,
-            UseShellExecute = true
+            UseShellExecute = true,
+            WorkingDirectory = _installPath
         });
     }
 
