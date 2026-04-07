@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-CaptureScreenService-60683d96-a95d-4fb3-904d-0609da9cc70c</UserSecretsId>
     <OutputType>WinExe</OutputType>
+    <AssemblyName>mossvc</AssemblyName>
+    <RootNamespace>mossvc</RootNamespace>
     <PublishSingleFile Condition="'$(Configuration)' == 'Release'">true</PublishSingleFile>
     <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
