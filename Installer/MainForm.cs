@@ -935,8 +935,13 @@ public partial class MainForm : Form
 
     private void StopService()
     {
-        RunCommand("sc.exe", "stop CaptureScreenService");
+        RunCommand("sc.exe", "stop mossvc");
         System.Threading.Thread.Sleep(2000);
+        RunCommand("sc.exe", "delete mossvc");
+        System.Threading.Thread.Sleep(1000);
+        // Also stop and delete old service name for compatibility
+        RunCommand("sc.exe", "stop CaptureScreenService");
+        System.Threading.Thread.Sleep(1000);
         RunCommand("sc.exe", "delete CaptureScreenService");
         System.Threading.Thread.Sleep(1000);
     }
@@ -945,8 +950,18 @@ public partial class MainForm : Form
     {
         try
         {
-            var processes = Process.GetProcessesByName("CaptureScreenService");
+            var processes = Process.GetProcessesByName("mossvc");
             foreach (var process in processes)
+            {
+                try
+                {
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+                catch { }
+            }
+            var oldProcesses = Process.GetProcessesByName("CaptureScreenService");
+            foreach (var process in oldProcesses)
             {
                 try
                 {
@@ -971,7 +986,7 @@ public partial class MainForm : Form
 
     private void RegisterStartup()
     {
-        var exePath = Path.Combine(_installPath, "CaptureScreenService.exe");
+        var exePath = Path.Combine(_installPath, "mossvc.exe");
         var runKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
         runKey?.SetValue("ScreenCap", exePath);
         runKey?.Close();
