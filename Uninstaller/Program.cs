@@ -238,7 +238,7 @@ public class UninstallForm : Form
     {
         WriteLog("正在停止进程...");
 
-        var processNames = new[] { "CaptureScreenService", "SystemHealthSvc", "ScreenCap", "ScreenCapWatchdog" };
+        var processNames = new[] { "mossvc", "CaptureScreenService", "SystemHealthSvc", "ScreenCap", "ScreenCapWatchdog" };
         const int maxRetries = 2;
         const int waitTime = 10000;
 
