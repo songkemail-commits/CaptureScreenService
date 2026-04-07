@@ -623,7 +623,7 @@ public partial class MainForm : Form
             // 如果文件不存在，返回默认的EULA内容
             return "电脑使用监控工具 (Computer Usage Monitoring Tool)\n" +
                    "最终用户许可协议 (End User License Agreement)\n\n" +
-                   "版本：0.3\n" +
+                   "版本：0.3.1\n" +
                    "开发者：songkemail-commits\n\n" +
                    "1. 协议接受\n\n" +
                    "安装并使用本软件，即表示您同意本协议的所有条款和条件。如果您不同意本协议，请不要安装或使用本软件。\n\n" +
@@ -821,7 +821,7 @@ public partial class MainForm : Form
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\CaptureScreenService");
 
         uninstallKey.SetValue("DisplayName", "mossvc");
-        uninstallKey.SetValue("DisplayVersion", "0.3");
+        uninstallKey.SetValue("DisplayVersion", "0.3.1");
         uninstallKey.SetValue("Publisher", "mossvc");
         uninstallKey.SetValue("InstallLocation", _installPath);
         uninstallKey.SetValue("DisplayIcon", Path.Combine(_installPath, "mossvc.exe"));
